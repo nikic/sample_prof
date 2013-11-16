@@ -37,7 +37,7 @@ if (isset($options['interval'])) {
     $sampleInterval = $options['interval'];
     unset($options['interval']);
 } else {
-    $sampleInterval = 10;
+    $sampleInterval = 0;
 }
 
 if (isset($options['signum'])) {

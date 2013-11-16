@@ -107,7 +107,7 @@ static void sample_prof_start(long interval_usec, size_t num_entries_alloc, int 
 }
 
 PHP_FUNCTION(sample_prof_start) {
-	long interval_usec = SAMPLE_PROF_DEFAULT_INTERVAL;
+	long interval_usec = 0;
 	long num_entries_alloc = 0;
 	long signum = 0;
 
@@ -115,9 +115,11 @@ PHP_FUNCTION(sample_prof_start) {
 		return;
 	}
 
-	if (interval_usec <= 0) {
-		zend_throw_exception(NULL, "Number of microseconds must be positive", 0 TSRMLS_CC);
+	if (interval_usec < 0) {
+		zend_throw_exception(NULL, "Number of microseconds can't be negative", 0 TSRMLS_CC);
 		return;
+	} else if (interval_usec == 0) {
+		interval_usec = SAMPLE_PROF_DEFAULT_INTERVAL;
 	}
 
 	if (num_entries_alloc < 0) {
@@ -133,8 +135,6 @@ PHP_FUNCTION(sample_prof_start) {
 	} else if (signum == 0) {
 		signum = SAMPLE_PROF_DEFAULT_SIGNUM;
 	}
-
-	php_printf("%d %d\n", signum, SIGRTMIN);
 
 	sample_prof_start(interval_usec, num_entries_alloc, signum);
 }
