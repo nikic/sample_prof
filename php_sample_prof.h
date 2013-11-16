@@ -25,6 +25,7 @@ typedef struct _sample_prof_entry {
 
 ZEND_BEGIN_MODULE_GLOBALS(sample_prof)
 	zend_bool enabled;
+	int signum;
 	timer_t timer_id;
 	sample_prof_entry *entries;
 	size_t entries_num;
@@ -38,13 +39,4 @@ ZEND_END_MODULE_GLOBALS(sample_prof)
 #endif
 
 #endif
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */
 
