@@ -24,6 +24,8 @@ typedef struct _sample_prof_entry {
 } sample_prof_entry;
 
 ZEND_BEGIN_MODULE_GLOBALS(sample_prof)
+	zend_bool enabled;
+	timer_t timer_id;
 	sample_prof_entry *entries;
 	size_t entries_num;
 	size_t entries_allocated;

@@ -9,11 +9,37 @@
 
 #include <signal.h>
 
-#define SAMPLE_PROF_INITIAL_ALLOC 100000
+/* We don't use SIGPROF because it interferes with set_time_limit(). */
+#define SAMPLE_PROF_SIGNAL SIGRTMIN+1
+
+#define SAMPLE_PROF_DEFAULT_INTERVAL 100
+
+/* On 64-bit this will give a 16 * 1MB allocation */
+#define SAMPLE_PROF_DEFAULT_ALLOC (1 << 20)
 
 ZEND_DECLARE_MODULE_GLOBALS(sample_prof)
 
-static void sample_prof_handler(int signal) {
+static inline sample_prof_remove_signal_handler() {
+	struct sigaction sa;
+	sa.sa_handler = SIG_DFL;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sigaction(SAMPLE_PROF_SIGNAL, &sa, NULL);
+}
+
+static inline zend_bool sample_prof_end() {
+	if (!SAMPLE_PROF_G->enabled) {
+		return 0;
+	}
+
+	timer_delete(SAMPLE_PROF_G->timer_id);
+	sample_prof_remove_signal_handler();
+
+	SAMPLE_PROF_G->enabled = 0;
+	return 1;
+}
+
+static void sample_prof_handler(int signum) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
 
 	if (!EG(opline_ptr)) {
@@ -24,51 +50,79 @@ static void sample_prof_handler(int signal) {
 	g->entries[g->entries_num].lineno = (*EG(opline_ptr))->lineno;
 
 	if (++g->entries_num == g->entries_allocated) {
-		g->entries_allocated *= 2;
-		g->entries = erealloc(g->entries, g->entries_allocated);
+		/* Doing a realloc within a signal handler is unsafe, end profiling */
+		sample_prof_end();
 	}
 }
 
-static void sample_prof_start(long msec) {
+static void sample_prof_start(long interval_usec, size_t num_entries_alloc) {
 	struct sigaction sa;
-	struct itimerval timer;
+	struct sigevent sev;
+	struct itimerspec its;
+
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
 
-	sa.sa_handler = &sample_prof_handler;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-
-	timer.it_interval.tv_sec = 0;
-	timer.it_interval.tv_usec = msec;
-	timer.it_value = timer.it_interval;
-
-	/* NULL = ignore old handler/timer */
-	sigaction(SIGPROF, &sa, NULL);
-	setitimer(ITIMER_PROF, &timer, NULL);
-
+	/* Initialize data structures for entries */
 	if (g->entries) {
 		efree(g->entries);
 	}
-	g->entries_allocated = SAMPLE_PROF_INITIAL_ALLOC;
+
+	g->entries_allocated = num_entries_alloc;
 	g->entries_num = 0;
 	g->entries = safe_emalloc(g->entries_allocated, sizeof(sample_prof_entry), 0);
-}
 
-static void sample_prof_end() {
-	struct itimerval timer;
-	timer.it_interval.tv_sec = timer.it_interval.tv_usec = 0;
-	timer.it_value = timer.it_interval;
-	setitimer(ITIMER_PROF, &timer, NULL);
-}
-
-PHP_FUNCTION(sample_prof_start) {
-	long msec;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &msec) == FAILURE) {
+	/* Register signal handler */
+	sa.sa_handler = &sample_prof_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if (-1 == sigaction(SAMPLE_PROF_SIGNAL, &sa, NULL /* ignore old handler */)) {
+		zend_throw_exception(NULL, "Could not register signal handler", 0 TSRMLS_CC);
 		return;
 	}
 
-	sample_prof_start(msec);
+	/* Create timer */
+	memset(&sev, 0, sizeof(struct sigevent));
+	sev.sigev_notify = SIGEV_SIGNAL;
+	sev.sigev_signo = SAMPLE_PROF_SIGNAL;
+	if (-1 == timer_create(CLOCK_REALTIME, &sev, &g->timer_id)) {
+		sample_prof_remove_signal_handler();
+		zend_throw_exception(NULL, "Could not create timer", 0 TSRMLS_CC);
+		return;
+	}
+
+	/* Arm timer */
+	its.it_value.tv_sec = interval_usec / 1000000;
+	its.it_value.tv_nsec = interval_usec * 1000;
+	its.it_interval = its.it_value;
+	if (-1 == timer_settime(g->timer_id, 0, &its, NULL /* ignore old timerspec */)) {
+		timer_delete(g->timer_id);
+		sample_prof_remove_signal_handler();
+		zend_throw_exception(NULL, "Could not arm timer", 0 TSRMLS_CC);
+		return;
+	}
+
+	g->enabled = 1;
+}
+
+PHP_FUNCTION(sample_prof_start) {
+	long interval_usec = SAMPLE_PROF_DEFAULT_INTERVAL;
+	long num_entries_alloc = SAMPLE_PROF_DEFAULT_ALLOC;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|ll", &interval_usec, &num_entries_alloc) == FAILURE) {
+		return;
+	}
+
+	if (interval_usec <= 0) {
+		zend_throw_exception(NULL, "Number of microseconds must be positive");
+		return;
+	}
+
+	if (num_entries_alloc <= 0) {
+		zend_throw_exception(NULL, "Number of profiling must be positive");
+		return;
+	}
+
+	sample_prof_start(interval_usec, num_entries_alloc);
 }
 
 PHP_FUNCTION(sample_prof_end) {
@@ -76,7 +130,7 @@ PHP_FUNCTION(sample_prof_end) {
 		return;
 	}
 
-	sample_prof_end();
+	RETURN_BOOL(sample_prof_end());
 }
 
 PHP_FUNCTION(sample_prof_get_data) {
@@ -117,27 +171,18 @@ PHP_FUNCTION(sample_prof_get_data) {
 	}
 }
 
-PHP_MINIT_FUNCTION(sample_prof)
-{
-	return SUCCESS;
-}
-
-PHP_MSHUTDOWN_FUNCTION(sample_prof)
-{
-	return SUCCESS;
-}
-
 PHP_RINIT_FUNCTION(sample_prof)
 {
+	SAMPLE_PROF_G->enabled = 0;
 	SAMPLE_PROF_G->entries = NULL;
 	SAMPLE_PROF_G->entries_num = 0;
-	SAMPLE_PROF_G->entries_allocated = 0;
 
 	return SUCCESS;
 }
 
 PHP_RSHUTDOWN_FUNCTION(sample_prof)
 {
+	sample_prof_end();
 	if (SAMPLE_PROF_G->entries) {
 		efree(SAMPLE_PROF_G->entries);
 	}
@@ -163,8 +208,8 @@ zend_module_entry sample_prof_module_entry = {
 	STANDARD_MODULE_HEADER,
 	"sample_prof",
 	sample_prof_functions,
-	PHP_MINIT(sample_prof),
-	PHP_MSHUTDOWN(sample_prof),
+	NULL,
+	NULL,
 	PHP_RINIT(sample_prof),	
 	PHP_RSHUTDOWN(sample_prof),
 	PHP_MINFO(sample_prof),

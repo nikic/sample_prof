@@ -7,7 +7,11 @@ $newArgs = [];
 for ($i = 1; $i < $argc; ++$i) {
     $arg = $argv[$i];
     if (0 === strpos($arg, '--')) {
-        $options[substr($arg, 2)] = true;
+        if (false !== $pos = strpos($arg, '=')) {
+            $options[substr($arg, 2, $pos-2)] = substr($arg, $pos+1);
+        } else {
+            $options[substr($arg, 2)] = true;
+        }
     } elseif (null === $script) {
         $script = $arg;
         $newArgs[] = $arg;
@@ -16,21 +20,35 @@ for ($i = 1; $i < $argc; ++$i) {
     }
 }
 
-if (empty($options) || isset($options['html'])) {
+if (isset($options['html'])) {
     $type = 'html';
+    unset($options['html']);
 } elseif (isset($options['callgrind'])) {
     $type = 'callgrind';
+    unset($options['callgrind']);
+} elseif (isset($options['DEBUG'])) {
+    $type = 'DEBUG';
+    unset($options['DEBUG']);
+} else {
+    $type = 'html';
 }
 
-if (null === $script || count($options) > 1) {
-    die('Usage: php sample_prof.php [--html | --callgrind] script.php ...args');
+if (isset($options['interval'])) {
+    $sampleInterval = $options['interval'];
+    unset($options['interval']);
+} else {
+    $sampleInterval = 10;
+}
+
+if (null === $script || !empty($options)) {
+    die("Usage: php sample_prof.php [--html | --callgrind] [--interval=usecs] script.php ...args\n");
 }
 
 $argv = $newArgs;
 $argc = count($argv);
 
 ob_start();
-sample_prof_start(1);
+sample_prof_start($sampleInterval);
 require $script;
 sample_prof_end();
 $output = ob_get_clean();
@@ -83,6 +101,7 @@ HEADER;
         echo '</td><td class="code">';
         highlight_file($file);
         echo '</td></tr></table>';
+        echo "\n";
     }
 } elseif ('callgrind' === $type) {
     echo "events: Hits\n";
@@ -94,4 +113,6 @@ HEADER;
             echo "$line $hits\n";
         }
     }
+} elseif ('DEBUG' === $type) {
+    echo $output, "\n";
 }
