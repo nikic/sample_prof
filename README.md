@@ -10,7 +10,7 @@ to be more precise). This means that
    function took the longest to run.
  * they slow down code execution significantly and asymmetrically, which often also impacts which
    parts are slowest. Thus the profiler may tell you something is slow, but it's not actually slow
-   in a production environmen (with profiling disabled).
+   in a production environment (with profiling disabled).
 
 A sampling profiler on the other hand provides line-level resolution and, depending on the chosen
 sampling interval, either doesn't affect performance at all or slows down everything symmetrically.
@@ -101,14 +101,14 @@ longer the script runs the better the results will be.
 [Sample profiling output][sample_output]: The numbers in the second column specify how often a
 line has been hit. Lines that were hit more often are displayed in red.
 
-Note that the hits are *not commulative*, i.e. if you perform a function the hits within the call
+Note that the hits are *not cumulative*, i.e. if you perform a function the hits within the call
 will *not* be added to the hits on the function call line.
 
 Todo
 ----
 
  * Maybe support profiling in multi-threaded environments.
- * Check whether we can get commulative hits without impacting performance too much.
+ * Check whether we can get cumulative hits without impacting performance too much.
  * Check whether we can avoid getting incorrect results when the `SIGPROF` interrupt handler is
    invoked at a time where `active_op_array` has already been changed but `opline_ptr` is not
    updated yet.
