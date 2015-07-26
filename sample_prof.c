@@ -20,7 +20,7 @@
 
 ZEND_DECLARE_MODULE_GLOBALS(sample_prof)
 
-static inline sample_prof_remove_signal_handler(int signum) {
+static inline void sample_prof_remove_signal_handler(int signum) {
 	struct sigaction sa;
 	sa.sa_handler = SIG_DFL;
 	sigemptyset(&sa.sa_mask);
@@ -42,13 +42,25 @@ static inline zend_bool sample_prof_end() {
 
 static void sample_prof_handler(int signum) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
+#ifdef ZEND_ENGINE_3
+	zend_execute_data *ex = EG(current_execute_data);
+	while (ex && !ZEND_USER_CODE(ex->func->type)) {
+		ex = ex->prev_execute_data;
+	}
+	if (!ex) {
+		return;
+	}
 
+	g->entries[g->entries_num].filename = ex->func->op_array.filename;
+	g->entries[g->entries_num].lineno = ex->opline->lineno;
+#else
 	if (!EG(opline_ptr)) {
 		return;
 	}
 
 	g->entries[g->entries_num].filename = EG(active_op_array)->filename;
 	g->entries[g->entries_num].lineno = (*EG(opline_ptr))->lineno;
+#endif
 
 	if (++g->entries_num == g->entries_allocated) {
 		/* Doing a realloc within a signal handler is unsafe, end profiling */
@@ -159,6 +171,27 @@ PHP_FUNCTION(sample_prof_get_data) {
 
 	for (entry_num = 0; entry_num < g->entries_num; ++entry_num) {
 		sample_prof_entry *entry = &g->entries[entry_num];
+#ifdef ZEND_ENGINE_3
+		zend_string *filename = entry->filename;
+		uint32_t lineno = entry->lineno;
+		zval *lines, *num;
+
+		lines = zend_hash_find(Z_ARR_P(return_value), filename);
+		if (lines == NULL) {
+			zval lines_zv;
+			array_init(&lines_zv);
+			lines = zend_hash_update(Z_ARR_P(return_value), filename, &lines_zv);
+		}
+
+		num = zend_hash_index_find(Z_ARR_P(lines), lineno);
+		if (num == NULL) {
+			zval num_zv;
+			ZVAL_LONG(&num_zv, 0);
+			num = zend_hash_index_update(Z_ARR_P(lines), lineno, &num_zv);
+		}
+
+		increment_function(num);
+#else
 		const char *filename = entry->filename;
 		zend_uint lineno = entry->lineno;
 
@@ -182,6 +215,7 @@ PHP_FUNCTION(sample_prof_get_data) {
 		}
 
 		increment_function(*num);
+#endif
 	}
 }
 
