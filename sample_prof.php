@@ -106,11 +106,25 @@ HEADER;
 } elseif ('callgrind' === $type) {
     echo "events: Hits\n";
 
+    $functions = collect_functions();
     foreach ($data as $file => $lines) {
-        echo "\nfi=$file\n";
-        echo "fn=$file\n";
+        // Group by function
+        $funcData = [];
         foreach ($lines as $line => $hits) {
-            echo "$line $hits\n";
+            $func = find_function_at_pos($functions, $file, $line);
+            if (null === $func) {
+                $func = '{unknown}';
+            }
+            $funcData[$func][$line] = $hits;
+        }
+
+        // Print data
+        foreach ($funcData as $func => $data) {
+            echo "\nfl=$file\n";
+            echo "fn=$func\n";
+            foreach ($data as $line => $hits) {
+                echo "$line $hits\n";
+            }
         }
     }
 } elseif ('DEBUG' === $type) {
@@ -121,4 +135,36 @@ HEADER;
 
     echo 'Files: ', count($data), "\n";
     echo 'Total hits: ', $totalHits, "\n";
+}
+
+function collect_functions() {
+    $functions = [];
+
+    $classes = get_declared_classes();
+    foreach ($classes as $class) {
+        $rc = new ReflectionClass($class);
+        $fileName = $rc->getFileName();
+        foreach ($rc->getMethods() as $rm) {
+            $name = $class . "::" . $rm->name;
+            $functions[$fileName][] = [$name, $rm->getStartLine(), $rm->getEndLine()];
+        }
+    }
+
+    // TODO Free functions
+
+    return $functions;
+}
+
+function find_function_at_pos($functions, $fileName, $line) {
+    if (!isset($functions[$fileName])) {
+        return null;
+    }
+
+    foreach ($functions[$fileName] as list($name, $startLine, $endLine)) {
+        if ($line >= $startLine && $line <= $endLine) {
+            return $name;
+        }
+    }
+
+    return null;
 }
