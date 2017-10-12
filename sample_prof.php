@@ -40,6 +40,13 @@ if (isset($options['interval'])) {
     $sampleInterval = 0;
 }
 
+if (isset($options['signum'])) {
+    $signum = $options['signum'];
+    unset($options['signum']);
+} else {
+    $signum = 0;
+}
+
 if (null === $script || !empty($options)) {
     die("Usage: php sample_prof.php [--html | --callgrind] [--interval=usecs] script.php ...args\n");
 }
@@ -48,7 +55,7 @@ $argv = $newArgs;
 $argc = count($argv);
 
 ob_start();
-sample_prof_start($sampleInterval);
+sample_prof_start($sampleInterval, 0, $signum);
 require $script;
 sample_prof_end();
 $output = ob_get_clean();

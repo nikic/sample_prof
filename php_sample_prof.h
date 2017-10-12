@@ -30,8 +30,8 @@ typedef struct _sample_prof_entry {
 
 ZEND_BEGIN_MODULE_GLOBALS(sample_prof)
 	zend_bool enabled;
-	long interval_usec;
-	pthread_t thread_id;
+	int signum;
+	timer_t timer_id;
 	sample_prof_entry *entries;
 	size_t entries_num;
 	size_t entries_allocated;
