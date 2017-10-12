@@ -44,10 +44,10 @@ static void sample_prof_handler(int signum) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
 #ifdef ZEND_ENGINE_3
 	zend_execute_data *ex = EG(current_execute_data);
-	while (ex && !ZEND_USER_CODE(ex->func->type)) {
+	while (ex && ex->func && !ZEND_USER_CODE(ex->func->type)) {
 		ex = ex->prev_execute_data;
 	}
-	if (!ex) {
+	if (!ex || !ex->func) {
 		return;
 	}
 
