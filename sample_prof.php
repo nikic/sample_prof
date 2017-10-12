@@ -157,7 +157,12 @@ function collect_functions() {
         }
     }
 
-    // TODO Free functions
+    $userFunctions = get_defined_functions()['user'];
+    foreach ($userFunctions as $function) {
+        $rf = new ReflectionFunction($function);
+        $fileName = $rf->getFileName();
+        $functions[$fileName][] = [$function, $rf->getStartLine(), $rf->getEndLine()];
+    }
 
     return $functions;
 }
