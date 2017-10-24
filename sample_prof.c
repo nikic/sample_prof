@@ -30,9 +30,18 @@ static inline zend_bool sample_prof_end() {
 
 static void *sample_prof_handler(void *data) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
+
+#ifdef ZEND_ENGINE_3
+# ifdef ZTS
+	volatile zend_executor_globals *eg = TSRMG_BULK(executor_globals_id, zend_executor_globals *);
+# else
+	volatile zend_executor_globals *eg = &executor_globals;
+# endif
+#endif
+
 	while (1) {
 #ifdef ZEND_ENGINE_3
-		zend_execute_data *ex = EG(current_execute_data);
+		zend_execute_data *ex = eg->current_execute_data;
 		while (ex && ex->func && !ZEND_USER_CODE(ex->func->type)) {
 			ex = ex->prev_execute_data;
 		}
