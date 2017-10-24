@@ -39,7 +39,7 @@ static void *sample_prof_handler(void *data) {
 
 retry_now:
 	while (1) {
-		zend_execute_data *ex = eg->current_execute_data, *start_ex = ex;
+		volatile zend_execute_data *ex = eg->current_execute_data, *start_ex = ex;
 		zend_function *func;
 		const zend_op *opline;
 
