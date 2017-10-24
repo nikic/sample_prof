@@ -19,13 +19,8 @@ extern zend_module_entry sample_prof_module_entry;
 #endif
 
 typedef struct _sample_prof_entry {
-#ifdef ZEND_ENGINE_3
 	zend_string *filename;
 	uint32_t lineno;
-#else
-	const char *filename;
-	zend_uint lineno;
-#endif
 } sample_prof_entry;
 
 ZEND_BEGIN_MODULE_GLOBALS(sample_prof)

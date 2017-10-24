@@ -30,7 +30,7 @@ Usage
 
 ### API
 
-#### `void sample_prof_start($interval_usec = 100, $num_entries_alloc = 1<<20, $signum = SIGRTMIN)`
+#### `void sample_prof_start($interval_usec = 1, $num_entries_alloc = 1<<20)`
 
 Starts the profiler. Parameters:
 
@@ -49,9 +49,6 @@ Starts the profiler. Parameters:
    of `1 << 20` corresponds to roughly one million samples (the actual allocation size being 8MB or
    16MB depending on platform). At a sampling interval of 100usec this will allow sampling to
    continue for approximately 100 seconds.
-
- * `$signum = SIGRTMIN`: The signal to use for the timer. By default the first real-time signal
-   will be used (as specified by `SIGRTMIN`).
 
 #### `bool sample_prof_end()`
 
