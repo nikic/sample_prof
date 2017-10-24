@@ -44,6 +44,8 @@ retry_now:
 		const zend_op *opline;
 
 		while (1) {
+			zend_execute_data *prev;
+
 			/* We're not executing code right now, try again later */
 			if (!ex) {
 				goto retry_later;
@@ -51,6 +53,7 @@ retry_now:
 
 			func = ex->func;
 			opline = ex->opline;
+			prev = ex->prev_execute_data;
 
 			/* current_execute_data changed in the meantime, reload it */
 			if (eg->current_execute_data != start_ex) {
@@ -61,7 +64,7 @@ retry_now:
 				break;
 			}
 
-			ex = ex->prev_execute_data;
+			ex = prev;
 		}
 
 		if (!opline) {
