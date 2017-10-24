@@ -80,7 +80,8 @@ retry_now:
 
 		if (++g->entries_num == g->entries_allocated) {
 			/* Doing a realloc within a signal handler is unsafe, end profiling */
-			sample_prof_end();
+			g->enabled = 0;
+			break;
 		}
 
 retry_later:
