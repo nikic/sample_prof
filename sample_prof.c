@@ -31,17 +31,14 @@ static inline zend_bool sample_prof_end() {
 static void *sample_prof_handler(void *data) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
 
-#ifdef ZEND_ENGINE_3
-# ifdef ZTS
+#ifdef ZTS
 	volatile zend_executor_globals *eg = TSRMG_BULK(executor_globals_id, zend_executor_globals *);
-# else
+#else
 	volatile zend_executor_globals *eg = &executor_globals;
-# endif
 #endif
 
 retry_now:
 	while (1) {
-#ifdef ZEND_ENGINE_3
 		zend_execute_data *ex = eg->current_execute_data, *start_ex = ex;
 		zend_function *func;
 		const zend_op *opline;
@@ -69,14 +66,6 @@ retry_now:
 
 		g->entries[g->entries_num].filename = func->op_array.filename;
 		g->entries[g->entries_num].lineno = opline->lineno;
-#else
-		if (!EG(opline_ptr)) {
-			continue;
-		}
-
-		g->entries[g->entries_num].filename = EG(active_op_array)->filename;
-		g->entries[g->entries_num].lineno = (*EG(opline_ptr))->lineno;
-#endif
 
 		if (++g->entries_num == g->entries_allocated) {
 			/* Doing a realloc within a signal handler is unsafe, end profiling */
@@ -157,7 +146,6 @@ PHP_FUNCTION(sample_prof_get_data) {
 
 	for (entry_num = 0; entry_num < g->entries_num; ++entry_num) {
 		sample_prof_entry *entry = &g->entries[entry_num];
-#ifdef ZEND_ENGINE_3
 		zend_string *filename = entry->filename;
 		uint32_t lineno = entry->lineno;
 		zval *lines, *num;
@@ -177,31 +165,6 @@ PHP_FUNCTION(sample_prof_get_data) {
 		}
 
 		increment_function(num);
-#else
-		const char *filename = entry->filename;
-		zend_uint lineno = entry->lineno;
-
-		zval **lines;
-		zval **num;
-
-		if (zend_hash_find(Z_ARRVAL_P(return_value), filename, strlen(filename)+1, (void **) &lines) == FAILURE) {
-			zval *lines_zv;
-			MAKE_STD_ZVAL(lines_zv);
-			array_init(lines_zv);
-
-			zend_hash_update(Z_ARRVAL_P(return_value), filename, strlen(filename)+1, (void *) &lines_zv, sizeof(zval *), (void **) &lines);
-		}
-
-		if (zend_hash_index_find(Z_ARRVAL_PP(lines), lineno, (void **) &num) == FAILURE) {
-			zval *num_zv;
-			MAKE_STD_ZVAL(num_zv);
-			ZVAL_LONG(num_zv, 0);
-
-			zend_hash_index_update(Z_ARRVAL_PP(lines), lineno, (void *) &num_zv, sizeof(zval *), (void **) &num);
-		}
-
-		increment_function(*num);
-#endif
 	}
 }
 
