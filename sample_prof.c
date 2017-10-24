@@ -102,8 +102,8 @@ static void sample_prof_start(long interval_usec, size_t num_entries_alloc) {
 }
 
 PHP_FUNCTION(sample_prof_start) {
-	long interval_usec = 0;
-	long num_entries_alloc = 0;
+	zend_long interval_usec = 0;
+	zend_long num_entries_alloc = 0;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|ll", &interval_usec, &num_entries_alloc) == FAILURE) {
 		return;
