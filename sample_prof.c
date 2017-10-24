@@ -39,18 +39,36 @@ static void *sample_prof_handler(void *data) {
 # endif
 #endif
 
+retry_now:
 	while (1) {
 #ifdef ZEND_ENGINE_3
-		zend_execute_data *ex = eg->current_execute_data;
-		while (ex && ex->func && !ZEND_USER_CODE(ex->func->type)) {
+		zend_execute_data *ex = eg->current_execute_data, *start_ex = ex;
+		zend_function *func;
+		const zend_op *opline;
+
+		while (1) {
+			/* We're not executing code right now, try again later */
+			if (!ex) {
+				goto retry_later;
+			}
+
+			func = ex->func;
+			opline = ex->opline;
+
+			/* current_execute_data changed in the meantime, reload it */
+			if (eg->current_execute_data != start_ex) {
+				goto retry_now;
+			}
+
+			if (func && ZEND_USER_CODE(func->type)) {
+				break;
+			}
+
 			ex = ex->prev_execute_data;
 		}
-		if (!ex || !ex->func) {
-			continue;
-		}
 
-		g->entries[g->entries_num].filename = ex->func->op_array.filename;
-		g->entries[g->entries_num].lineno = ex->opline->lineno;
+		g->entries[g->entries_num].filename = func->op_array.filename;
+		g->entries[g->entries_num].lineno = opline->lineno;
 #else
 		if (!EG(opline_ptr)) {
 			continue;
@@ -65,6 +83,7 @@ static void *sample_prof_handler(void *data) {
 			sample_prof_end();
 		}
 
+retry_later:
 		usleep(g->interval_usec);
 	}
 	pthread_exit(NULL);
