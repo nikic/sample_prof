@@ -64,6 +64,10 @@ retry_now:
 			ex = ex->prev_execute_data;
 		}
 
+		if (!opline) {
+			goto retry_later;
+		}
+
 		g->entries[g->entries_num].filename = func->op_array.filename;
 		g->entries[g->entries_num].lineno = opline->lineno;
 
