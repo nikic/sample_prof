@@ -8,71 +8,60 @@
 #include "php_sample_prof.h"
 #include "zend_exceptions.h"
 
-#include <signal.h>
+#include <pthread.h>
 
-/* We don't use SIGPROF because it interferes with set_time_limit(). */
-#define SAMPLE_PROF_DEFAULT_SIGNUM SIGRTMIN
-
-#define SAMPLE_PROF_DEFAULT_INTERVAL 100
+#define SAMPLE_PROF_DEFAULT_INTERVAL 1
 
 /* On 64-bit this will give a 16 * 1MB allocation */
 #define SAMPLE_PROF_DEFAULT_ALLOC (1 << 20)
 
 ZEND_DECLARE_MODULE_GLOBALS(sample_prof)
 
-static inline void sample_prof_remove_signal_handler(int signum) {
-	struct sigaction sa;
-	sa.sa_handler = SIG_DFL;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	sigaction(signum, &sa, NULL);
-}
-
 static inline zend_bool sample_prof_end() {
 	if (!SAMPLE_PROF_G->enabled) {
 		return 0;
 	}
 
-	timer_delete(SAMPLE_PROF_G->timer_id);
-	sample_prof_remove_signal_handler(SAMPLE_PROF_G->signum);
+	pthread_cancel(SAMPLE_PROF_G->thread_id);
 
 	SAMPLE_PROF_G->enabled = 0;
 	return 1;
 }
 
-static void sample_prof_handler(int signum) {
+static void *sample_prof_handler(void *data) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
+	while (1) {
 #ifdef ZEND_ENGINE_3
-	zend_execute_data *ex = EG(current_execute_data);
-	while (ex && ex->func && !ZEND_USER_CODE(ex->func->type)) {
-		ex = ex->prev_execute_data;
-	}
-	if (!ex || !ex->func) {
-		return;
-	}
+		zend_execute_data *ex = EG(current_execute_data);
+		while (ex && ex->func && !ZEND_USER_CODE(ex->func->type)) {
+			ex = ex->prev_execute_data;
+		}
+		if (!ex || !ex->func) {
+			continue;
+		}
 
-	g->entries[g->entries_num].filename = ex->func->op_array.filename;
-	g->entries[g->entries_num].lineno = ex->opline->lineno;
+		g->entries[g->entries_num].filename = ex->func->op_array.filename;
+		g->entries[g->entries_num].lineno = ex->opline->lineno;
 #else
-	if (!EG(opline_ptr)) {
-		return;
-	}
+		if (!EG(opline_ptr)) {
+			continue;
+		}
 
-	g->entries[g->entries_num].filename = EG(active_op_array)->filename;
-	g->entries[g->entries_num].lineno = (*EG(opline_ptr))->lineno;
+		g->entries[g->entries_num].filename = EG(active_op_array)->filename;
+		g->entries[g->entries_num].lineno = (*EG(opline_ptr))->lineno;
 #endif
 
-	if (++g->entries_num == g->entries_allocated) {
-		/* Doing a realloc within a signal handler is unsafe, end profiling */
-		sample_prof_end();
+		if (++g->entries_num == g->entries_allocated) {
+			/* Doing a realloc within a signal handler is unsafe, end profiling */
+			sample_prof_end();
+		}
+
+		usleep(g->interval_usec);
 	}
+	pthread_exit(NULL);
 }
 
-static void sample_prof_start(long interval_usec, size_t num_entries_alloc, int signum) {
-	struct sigaction sa;
-	struct sigevent sev;
-	struct itimerspec its;
-
+static void sample_prof_start(long interval_usec, size_t num_entries_alloc) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
 
 	/* Initialize data structures for entries */
@@ -80,38 +69,14 @@ static void sample_prof_start(long interval_usec, size_t num_entries_alloc, int 
 		efree(g->entries);
 	}
 
-	g->signum = signum;
+	g->interval_usec = interval_usec;
 	g->entries_allocated = num_entries_alloc;
 	g->entries_num = 0;
 	g->entries = safe_emalloc(g->entries_allocated, sizeof(sample_prof_entry), 0);
 
 	/* Register signal handler */
-	sa.sa_handler = &sample_prof_handler;
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	if (-1 == sigaction(signum, &sa, NULL /* ignore old handler */)) {
+	if (pthread_create(&g->thread_id, NULL, sample_prof_handler, NULL)) {
 		zend_throw_exception(NULL, "Could not register signal handler", 0 TSRMLS_CC);
-		return;
-	}
-
-	/* Create timer */
-	memset(&sev, 0, sizeof(struct sigevent));
-	sev.sigev_notify = SIGEV_SIGNAL;
-	sev.sigev_signo = signum;
-	if (-1 == timer_create(CLOCK_REALTIME, &sev, &g->timer_id)) {
-		sample_prof_remove_signal_handler(signum);
-		zend_throw_exception(NULL, "Could not create timer", 0 TSRMLS_CC);
-		return;
-	}
-
-	/* Arm timer */
-	its.it_value.tv_sec = interval_usec / 1000000;
-	its.it_value.tv_nsec = interval_usec * 1000;
-	its.it_interval = its.it_value;
-	if (-1 == timer_settime(g->timer_id, 0, &its, NULL /* ignore old timerspec */)) {
-		timer_delete(g->timer_id);
-		sample_prof_remove_signal_handler(signum);
-		zend_throw_exception(NULL, "Could not arm timer", 0 TSRMLS_CC);
 		return;
 	}
 
@@ -121,9 +86,8 @@ static void sample_prof_start(long interval_usec, size_t num_entries_alloc, int 
 PHP_FUNCTION(sample_prof_start) {
 	long interval_usec = 0;
 	long num_entries_alloc = 0;
-	long signum = 0;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|lll", &interval_usec, &num_entries_alloc, &signum) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|ll", &interval_usec, &num_entries_alloc) == FAILURE) {
 		return;
 	}
 
@@ -141,14 +105,7 @@ PHP_FUNCTION(sample_prof_start) {
 		num_entries_alloc = SAMPLE_PROF_DEFAULT_ALLOC;
 	}
 
-	if (signum < 0) {
-		zend_throw_exception(NULL, "Signal number can't be negative", 0 TSRMLS_CC);
-		return;
-	} else if (signum == 0) {
-		signum = SAMPLE_PROF_DEFAULT_SIGNUM;
-	}
-
-	sample_prof_start(interval_usec, num_entries_alloc, signum);
+	sample_prof_start(interval_usec, num_entries_alloc);
 }
 
 PHP_FUNCTION(sample_prof_end) {
