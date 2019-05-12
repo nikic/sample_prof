@@ -101,7 +101,7 @@ static void sample_prof_start(long interval_usec, size_t num_entries_alloc) {
 
 	/* Register signal handler */
 	if (pthread_create(&g->thread_id, NULL, sample_prof_handler, NULL)) {
-		zend_throw_exception(NULL, "Could not register signal handler", 0 TSRMLS_CC);
+		zend_throw_exception(NULL, "Could not register signal handler", 0);
 		return;
 	}
 
@@ -112,19 +112,19 @@ PHP_FUNCTION(sample_prof_start) {
 	zend_long interval_usec = 0;
 	zend_long num_entries_alloc = 0;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|ll", &interval_usec, &num_entries_alloc) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "|ll", &interval_usec, &num_entries_alloc) == FAILURE) {
 		return;
 	}
 
 	if (interval_usec < 0) {
-		zend_throw_exception(NULL, "Number of microseconds can't be negative", 0 TSRMLS_CC);
+		zend_throw_exception(NULL, "Number of microseconds can't be negative", 0);
 		return;
 	} else if (interval_usec == 0) {
 		interval_usec = SAMPLE_PROF_DEFAULT_INTERVAL;
 	}
 
 	if (num_entries_alloc < 0) {
-		zend_throw_exception(NULL, "Number of profiling can't be negative", 0 TSRMLS_CC);
+		zend_throw_exception(NULL, "Number of profiling can't be negative", 0);
 		return;
 	} else if (num_entries_alloc == 0) {
 		num_entries_alloc = SAMPLE_PROF_DEFAULT_ALLOC;
