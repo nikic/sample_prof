@@ -32,11 +32,7 @@ ZEND_BEGIN_MODULE_GLOBALS(sample_prof)
 	size_t entries_allocated;
 ZEND_END_MODULE_GLOBALS(sample_prof)
 
-#ifdef ZTS
-#define SAMPLE_PROF_G ((zend_sample_prof_globals *) (*(void ***) tsrm_ls)[TSRM_UNSHUFFLE_RSRC_ID(id)])
-#else
-#define SAMPLE_PROF_G (&sample_prof_globals)
-#endif
+#define SAMPLE_PROF_G ZEND_MODULE_GLOBALS_BULK(sample_prof)
 
 #endif
 
