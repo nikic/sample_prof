@@ -218,7 +218,11 @@ zend_module_entry sample_prof_module_entry = {
 	PHP_RSHUTDOWN(sample_prof),
 	PHP_MINFO(sample_prof),
 	PHP_SAMPLE_PROF_VERSION,
-	STANDARD_MODULE_PROPERTIES
+	PHP_MODULE_GLOBALS(sample_prof),
+	NULL,
+	NULL,
+	NULL,
+	STANDARD_MODULE_PROPERTIES_EX
 };
 
 #ifdef COMPILE_DL_SAMPLE_PROF
