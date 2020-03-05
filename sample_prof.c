@@ -7,6 +7,7 @@
 #include "ext/standard/info.h"
 #include "php_sample_prof.h"
 #include "zend_exceptions.h"
+#include "sample_prof_arginfo.h"
 
 #include <pthread.h>
 
@@ -202,9 +203,9 @@ PHP_MINFO_FUNCTION(sample_prof)
 }
 
 const zend_function_entry sample_prof_functions[] = {
-	PHP_FE(sample_prof_start, NULL)
-	PHP_FE(sample_prof_end, NULL)
-	PHP_FE(sample_prof_get_data, NULL)
+	PHP_FE(sample_prof_start, arginfo_sample_prof_start)
+	PHP_FE(sample_prof_end, arginfo_sample_prof_end)
+	PHP_FE(sample_prof_get_data, arginfo_sample_prof_get_data)
 	PHP_FE_END
 };
 
