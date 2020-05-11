@@ -6,15 +6,17 @@ $newArgs = [];
 
 for ($i = 1; $i < $argc; ++$i) {
     $arg = $argv[$i];
-    if (0 === strpos($arg, '--')) {
-        if (false !== $pos = strpos($arg, '=')) {
-            $options[substr($arg, 2, $pos-2)] = substr($arg, $pos+1);
+    if (null === $script) {
+        if (0 === strpos($arg, '--')) {
+            if (false !== $pos = strpos($arg, '=')) {
+                $options[substr($arg, 2, $pos-2)] = substr($arg, $pos+1);
+            } else {
+                $options[substr($arg, 2)] = true;
+            }
         } else {
-            $options[substr($arg, 2)] = true;
+            $script = $arg;
+            $newArgs[] = $arg;
         }
-    } elseif (null === $script) {
-        $script = $arg;
-        $newArgs[] = $arg;
     } else {
         $newArgs[] = $arg;
     }
