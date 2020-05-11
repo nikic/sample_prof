@@ -76,6 +76,7 @@ if ('html' === $type) {
     }
     .code {
         vertical-align: top;
+        white-space: nowrap;
     }
 </style>
 HEADER;
