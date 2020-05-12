@@ -90,6 +90,11 @@ retry_later:
 static void sample_prof_start(long interval_usec, size_t num_entries_alloc) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
 
+	if (g->enabled) {
+		zend_throw_exception(NULL, "The profiling is already running", 0);
+		return;
+	}
+
 	/* Initialize data structures for entries */
 	if (g->entries) {
 		efree(g->entries);
