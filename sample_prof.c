@@ -90,6 +90,11 @@ retry_later:
 static void sample_prof_start(long interval_usec, size_t num_entries_alloc) {
 	zend_sample_prof_globals *g = SAMPLE_PROF_G;
 
+	if (g->enabled) {
+		zend_throw_exception(NULL, "Profiling is already enabled", 0);
+		return;
+	}
+
 	/* Initialize data structures for entries */
 	if (g->entries) {
 		efree(g->entries);
@@ -229,4 +234,3 @@ zend_module_entry sample_prof_module_entry = {
 #ifdef COMPILE_DL_SAMPLE_PROF
 ZEND_GET_MODULE(sample_prof)
 #endif
-
