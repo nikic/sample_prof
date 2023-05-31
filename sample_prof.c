@@ -18,7 +18,7 @@
 
 ZEND_DECLARE_MODULE_GLOBALS(sample_prof)
 
-static inline zend_bool sample_prof_end() {
+static inline zend_bool sample_prof_end(void) {
 	if (!SAMPLE_PROF_G->enabled) {
 		return 0;
 	}
